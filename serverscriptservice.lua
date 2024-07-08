@@ -1,148 +1,157 @@
---Váriaveis
+--Variables
 local tween = game:GetService("TweenService")
-local portas = {}
-local distribuirporta = game.ReplicatedStorage.PortaS.Receive
+local doors = {}
+local senderdoorsconfigs = game.ReplicatedStorage.PortaS.Receive
+--Generate Random Code to prevent exploiters to bypass
 local GUIDGen = game:GetService("HttpService")
+--
 local trigger = game.ReplicatedStorage.PortaS.Trigger
 local receiver = game.ReplicatedStorage.PortaS.Receive
 -------------------
 
---Porta Grande Info
+--Big Door settings for tween
 local info = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.In,0,false,0)
---Porta Pequena Info
+--Small door settings for twen
 local info2 = TweenInfo.new(1,Enum.EasingStyle.Linear,Enum.EasingDirection.Out,0,false,0)
 -------------------
 
 
---Segurança
-local codigosegu = {}
-local dispositivos = {}
-local distribuidor = game.ReplicatedStorage.PortaS.Segu
+--Door Security
+local codesecurity = {}
+local devices = {}
+local UIDSender = game.ReplicatedStorage.PortaS.Segu
 -------------------
 
---Mapear todas portas
+--Map Ports
 for e, v in pairs(workspace:GetDescendants()) do
 	if v.Name == "Porta" and v:FindFirstChild("ModuleScript") then
-		table.insert(portas, v)
+		table.insert(doors, v)
 		local prompt = script.ProximityPrompt:Clone()
 		prompt.Parent = v
 	end
 end
 ---
 
---Eventos
+--Events
+--user code generated and sended to user
 game.Players.PlayerAdded:Connect(function(player)
-	local codigopessoal = GUIDGen:GenerateGUID(true)
-	codigosegu[player.Name] = codigopessoal
-	distribuidor:FireClient(player, codigopessoal)
+	local personalcode = GUIDGen:GenerateGUID(true)
+	codesecurity[player.Name] = personalcode
+	UIDSender:FireClient(player, personalcode)
 end)
 
+--user code removed from list after player exit from server
 game.Players.PlayerRemoving:Connect(function(player)
-	codigosegu[player.Name] = ""
+	codesecurity[player.Name] = ""
 end)
 
 
 
-trigger.OnServerEvent:Connect(function(pessoa,cod,porta)
+--Remove Event receive user trigger to open the door, and the code send to function "verify" sending the who door triggered, what door, and UID security cod from person
+trigger.OnServerEvent:Connect(function(person,cod,door)
 	wait(math.random(0.05,0.1))
-	verificacao(pessoa,cod,porta)
+	verify(person,cod,door)
 end)
 
 
 
 receiver.OnServerEvent:Connect(function(player)
-	game.ReplicatedStorage.PortaS.Receive:FireClient(player, portas)
+	game.ReplicatedStorage.PortaS.Receive:FireClient(player, doors)
 end)
 -------------------
 
 -------------------Funções
 
-function verificacao(pessoa, cod, porta)
-	if porta and codigosegu[pessoa.Name] == cod and codigosegu[pessoa.Name] ~= "" then
-		if porta.Name == "Porta" and porta:FindFirstChild("ModuleScript") then
-			if pessoa.Character:FindFirstChild("Humanoid") then
-				if (pessoa.Character.HumanoidRootPart.Position - porta.Position).Magnitude <= 8 then
-					local configs = require(porta["ModuleScript"])
+--Verify if user code is correcty, and if user has permissions to open the door, and others security measures
+function verify(person, cod, door)
+	if door and codesecurity[person.Name] == cod and codesecurity[person.Name] ~= "" then
+		if door.Name == "Porta" and door:FindFirstChild("ModuleScript") then
+			if person.Character:FindFirstChild("Humanoid") then
+				if (person.Character.HumanoidRootPart.Position - door.Position).Magnitude <= 8 then
+					local configs = require(door["ModuleScript"])
 					local status = configs["Status"]
-					local permitido = false
-					configspam(porta["ModuleScript"], false)
-					for e, v in pairs(configs["Permissões"]) do
-						if pessoa.Backpack:FindFirstChild(e) and v or pessoa.Character:FindFirstChild(e) and v then
-							permitido = true
-							if porta:FindFirstChild("Aprovado") then return end
-							local somperm = script.Aprovado:Clone()
-							somperm.Parent = porta
+					local allowed = false
+					configspam(door["ModuleScript"], false)
+					for e, v in pairs(configs["Permissions"]) do
+						if person.Backpack:FindFirstChild(e) and v or person.Character:FindFirstChild(e) and v then
+							allowed = true
+							if door:FindFirstChild("Allowed") then return end
+							local somperm = script.Allowed:Clone()
+							somperm.Parent = door
 							somperm:Play()
 							wait(1.381)
 							somperm:Destroy()
 						end
 					end
-					if status and permitido then
-						if porta.Parent.Name == "DOOR" and porta.Parent:FindFirstChild("frame") then
-							portapequena(porta, porta["ModuleScript"])
+					if status and allowed then
+						if door.Parent.Name == "DOOR" and door.Parent:FindFirstChild("frame") then
+							smalldor(door, door["ModuleScript"])
 						else
-							portagrande(porta, porta["ModuleScript"])
+							bigdoor(door, door["ModuleScript"])
 						end
 					end
-					if not permitido then
-						if porta:FindFirstChild("Negado") then return end
-						local somperm = script.Negado:Clone()
-						somperm.Parent = porta
+					if not allowed then
+						if door:FindFirstChild("Denied") then return end
+						local somperm = script.Denied:Clone()
+						somperm.Parent = door
 						somperm:Play()
 						wait(1.384)
 						somperm:Destroy()
 					end
-					configspam(porta["ModuleScript"], true)
+					configspam(door["ModuleScript"], true)
 				end
 			end
 		end
 	end
 end
 
-function configspam(configs, valor)
+--Check that there is no opening spawn, so the door doesn't bug.
+function configspam(configs, value)
 	local modulo = require(configs)
-	modulo.Status = valor
-	trigger:FireAllClients(configs, valor)
+	modulo.Status = value
+	trigger:FireAllClients(configs, value)
 end
 
-function portapequena(porta, configs)
-	local somabrir, somfechar = script.SomAbrir:Clone(), script.SomFechar:Clone()
-	local mover, mover2 = nil, nil
-	mover = tween:Create(porta.Parent["DOOR1"].PrimaryPart, info2, {["CFrame"] = (porta.Parent["DOOR1"].PrimaryPart.CFrame * CFrame.new(-4.7,0,0))})
-	mover2 = tween:Create(porta.Parent["DOOR2"].PrimaryPart, info2, {["CFrame"] = (porta.Parent["DOOR2"].PrimaryPart.CFrame * CFrame.new(4.7,0,0))})
-	somabrir.Parent = porta
-	somabrir:Play()
-	mover:Play()
-	mover2:Play()
-	mover2.Completed:Wait()
-	somabrir:Destroy()
+
+--Use the specific tween to open the smaller doors
+function smalldor(door, configs)
+	local soundallowed, sounddenied = script.allowedsound:Clone(), script.deniedsound:Clone()
+	local move, move2 = nil, nil
+	move = tween:Create(door.Parent["DOOR1"].PrimaryPart, info2, {["CFrame"] = (door.Parent["DOOR1"].PrimaryPart.CFrame * CFrame.new(-4.7,0,0))})
+	move2 = tween:Create(door.Parent["DOOR2"].PrimaryPart, info2, {["CFrame"] = (door.Parent["DOOR2"].PrimaryPart.CFrame * CFrame.new(4.7,0,0))})
+	soundallowed.Parent = door
+	soundallowed:Play()
+	move:Play()
+	move2:Play()
+	move2.Completed:Wait()
+	soundallowed:Destroy()
 	wait(5)
-	mover = tween:Create(porta.Parent["DOOR1"].PrimaryPart, info2, {["CFrame"] = (porta.Parent["DOOR1"].PrimaryPart.CFrame * CFrame.new(4.7,0,0))})
-	mover2 = tween:Create(porta.Parent["DOOR2"].PrimaryPart, info2, {["CFrame"] = (porta.Parent["DOOR2"].PrimaryPart.CFrame * CFrame.new(-4.7,0,0))})
-	somfechar.Parent = porta
-	somfechar:Play()
-	mover:Play()
-	mover2:Play()
-	mover2.Completed:Wait()
-	somfechar:Destroy()
+	move = tween:Create(door.Parent["DOOR1"].PrimaryPart, info2, {["CFrame"] = (door.Parent["DOOR1"].PrimaryPart.CFrame * CFrame.new(4.7,0,0))})
+	move2 = tween:Create(door.Parent["DOOR2"].PrimaryPart, info2, {["CFrame"] = (door.Parent["DOOR2"].PrimaryPart.CFrame * CFrame.new(-4.7,0,0))})
+	sounddenied.Parent = door
+	sounddenied:Play()
+	move:Play()
+	move2:Play()
+	move2.Completed:Wait()
+	sounddenied:Destroy()
 end
-
-function portagrande(porta,configs)
-	local mover = nil
-	local somabrir, somfechar = script.SomAbrirG:Clone(), script.SomFecharG:Clone()
-	mover = tween:Create(porta, info, {["Position"] = (porta.Position + Vector3.new(0,12,0))})
-	somabrir.Parent = porta
-	somabrir:Play()
-	mover:Play()
-	mover.Completed:Wait()
-	somabrir:Destroy()
+--Use the specific tween to open the big doors
+function bigdoor(door,configs)
+	local move = nil
+	local soundallowed, sounddenied = script.allowedsoundG:Clone(), script.deniedsoundG:Clone()
+	move = tween:Create(door, info, {["Position"] = (door.Position + Vector3.new(0,12,0))})
+	soundallowed.Parent = door
+	soundallowed:Play()
+	move:Play()
+	move.Completed:Wait()
+	soundallowed:Destroy()
 	wait(7)
-	mover = tween:Create(porta, info, {["Position"] = (porta.Position + Vector3.new(0,-12,0))})
-	somfechar.Parent = porta
-	somfechar:Play()
-	mover:Play()
-	mover.Completed:Wait()
-	somfechar:Destroy()
+	move = tween:Create(door, info, {["Position"] = (door.Position + Vector3.new(0,-12,0))})
+	sounddenied.Parent = door
+	sounddenied:Play()
+	move:Play()
+	move.Completed:Wait()
+	sounddenied:Destroy()
 end
 
 
